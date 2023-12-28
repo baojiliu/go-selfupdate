@@ -380,7 +380,6 @@ func (u *Updater) fetchBin() ([]byte, error) {
 }
 
 func (u *Updater) fetch(url string) (*http.Response, error) {
-	http.DefaultClient.Timeout = 5 * time.Second
 	return http.Get(url)
 }
 
