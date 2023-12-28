@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"math/rand"
 	"net/url"
 	"os"
@@ -210,22 +209,9 @@ func (u *Updater) Update() error {
 
 	bin, err := u.fetchAndVerifyPatch(old)
 	if err != nil {
-		if err == ErrHashMismatch {
-			log.Println("update: hash mismatch from patched binary")
-		} else {
-			if u.DiffURL != "" {
-				log.Println("update: patching binary,", err)
-			}
-		}
-
 		// if patch failed grab the full new bin
 		bin, err = u.fetchAndVerifyFullBin()
 		if err != nil {
-			if err == ErrHashMismatch {
-				log.Println("update: hash mismatch from full binary")
-			} else {
-				log.Println("update: fetching full binary,", err)
-			}
 			return err
 		}
 	}
