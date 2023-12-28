@@ -337,7 +337,7 @@ func (u *Updater) fetchAndApplyPatch(old io.Reader) ([]byte, error) {
 	defer r.Body.Close()
 	var buf bytes.Buffer
 	bar := progressbar.DefaultBytes(
-		r.ContentLength,
+		-1,
 		"Downloading",
 	)
 	err = binarydist.Patch(old, io.MultiWriter(&buf, bar), r.Body)
@@ -368,7 +368,7 @@ func (u *Updater) fetchBin() ([]byte, error) {
 		return nil, err
 	}
 	bar := progressbar.DefaultBytes(
-		r.ContentLength,
+		-1,
 		"Downloading",
 	)
 	if _, err = io.Copy(io.MultiWriter(buf, bar), gz); err != nil {
