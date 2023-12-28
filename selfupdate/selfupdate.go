@@ -319,44 +319,41 @@ func (u *Updater) fetchInfo() error {
 }
 
 func (u *Updater) fetchAndVerifyPatch(old io.Reader) ([]byte, error) {
-	bin, err := u.fetchAndApplyPatch(old)
-	if err != nil {
-		return nil, err
-	}
-	if !verifySha(bin, u.Info.Sha256) {
-		return nil, ErrHashMismatch
-	}
-	return bin, nil
-}
-
-func (u *Updater) fetchAndApplyPatch(old io.Reader) ([]byte, error) {
 	r, err := u.fetch(u.DiffURL + url.QueryEscape(u.CmdName) + "/" + url.QueryEscape(u.CurrentVersion) + "/" + url.QueryEscape(u.Info.Version) + "/" + url.QueryEscape(plat))
 	if err != nil {
 		return nil, err
 	}
 	defer r.Body.Close()
 	var buf bytes.Buffer
-	bar := progressbar.DefaultBytes(
+	bar := progressbar.NewOptions64(
 		r.ContentLength,
-		"Downloading",
+		progressbar.OptionSetDescription(fmt.Sprintf("Downloading %s", u.Info.Version)),
+		progressbar.OptionSetWriter(os.Stderr),
+		progressbar.OptionShowBytes(true),
+		progressbar.OptionSetWidth(10),
+		progressbar.OptionThrottle(65*time.Millisecond),
+		progressbar.OptionShowCount(),
+		progressbar.OptionOnCompletion(func() {
+			fmt.Println()
+		}),
+		progressbar.OptionSpinnerType(14),
+		progressbar.OptionFullWidth(),
+		progressbar.OptionSetRenderBlankState(false),
 	)
-	err = binarydist.Patch(old, io.MultiWriter(&buf, bar), r.Body)
-	return buf.Bytes(), err
+	patchErr := binarydist.Patch(old, io.MultiWriter(&buf, bar), r.Body)
+	if patchErr != nil {
+		return nil, patchErr
+	}
+	bar.Describe("Verifying Hash")
+	h := sha256.New()
+	h.Write(buf.Bytes())
+	if !bytes.Equal(h.Sum(nil), u.Info.Sha256) {
+		return nil, ErrHashMismatch
+	}
+	return buf.Bytes(), nil
 }
 
 func (u *Updater) fetchAndVerifyFullBin() ([]byte, error) {
-	bin, err := u.fetchBin()
-	if err != nil {
-		return nil, err
-	}
-	verified := verifySha(bin, u.Info.Sha256)
-	if !verified {
-		return nil, ErrHashMismatch
-	}
-	return bin, nil
-}
-
-func (u *Updater) fetchBin() ([]byte, error) {
 	r, err := u.fetch(u.BinURL + url.QueryEscape(u.CmdName) + "/" + url.QueryEscape(u.Info.Version) + "/" + url.QueryEscape(plat) + ".gz")
 	if err != nil {
 		return nil, err
@@ -367,12 +364,31 @@ func (u *Updater) fetchBin() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	bar := progressbar.DefaultBytes(
+
+	bar := progressbar.NewOptions64(
 		r.ContentLength,
-		"Downloading",
+		progressbar.OptionSetDescription(fmt.Sprintf("Downloading %s", u.Info.Version)),
+		progressbar.OptionSetWriter(os.Stderr),
+		progressbar.OptionShowBytes(true),
+		progressbar.OptionSetWidth(10),
+		progressbar.OptionThrottle(65*time.Millisecond),
+		progressbar.OptionShowCount(),
+		progressbar.OptionOnCompletion(func() {
+			fmt.Println()
+		}),
+		progressbar.OptionSpinnerType(14),
+		progressbar.OptionFullWidth(),
+		progressbar.OptionSetRenderBlankState(false),
 	)
 	if _, err = io.Copy(io.MultiWriter(buf, bar), gz); err != nil {
 		return nil, err
+	}
+
+	bar.Describe("Verifying Hash")
+	h := sha256.New()
+	h.Write(buf.Bytes())
+	if !bytes.Equal(h.Sum(nil), u.Info.Sha256) {
+		return nil, ErrHashMismatch
 	}
 
 	return buf.Bytes(), nil
