@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"github.com/kr/binarydist"
+	"github.com/schollz/progressbar/v3"
 )
 
 const (
@@ -305,8 +307,8 @@ func (u *Updater) fetchInfo() error {
 	if err != nil {
 		return err
 	}
-	defer r.Close()
-	err = json.NewDecoder(r).Decode(&u.Info)
+	defer r.Body.Close()
+	err = json.NewDecoder(r.Body).Decode(&u.Info)
 	if err != nil {
 		return err
 	}
@@ -332,9 +334,13 @@ func (u *Updater) fetchAndApplyPatch(old io.Reader) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer r.Close()
+	defer r.Body.Close()
 	var buf bytes.Buffer
-	err = binarydist.Patch(old, &buf, r)
+	bar := progressbar.DefaultBytes(
+		r.ContentLength,
+		"Downloading",
+	)
+	err = binarydist.Patch(old, io.MultiWriter(&buf, bar), r.Body)
 	return buf.Bytes(), err
 }
 
@@ -355,34 +361,26 @@ func (u *Updater) fetchBin() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer r.Close()
+	defer r.Body.Close()
 	buf := new(bytes.Buffer)
-	gz, err := gzip.NewReader(r)
+	gz, err := gzip.NewReader(r.Body)
 	if err != nil {
 		return nil, err
 	}
-	if _, err = io.Copy(buf, gz); err != nil {
+	bar := progressbar.DefaultBytes(
+		r.ContentLength,
+		"Downloading",
+	)
+	if _, err = io.Copy(io.MultiWriter(buf, bar), gz); err != nil {
 		return nil, err
 	}
 
 	return buf.Bytes(), nil
 }
 
-func (u *Updater) fetch(url string) (io.ReadCloser, error) {
-	if u.Requester == nil {
-		return defaultHTTPRequester.Fetch(url)
-	}
-
-	readCloser, err := u.Requester.Fetch(url)
-	if err != nil {
-		return nil, err
-	}
-
-	if readCloser == nil {
-		return nil, fmt.Errorf("Fetch was expected to return non-nil ReadCloser")
-	}
-
-	return readCloser, nil
+func (u *Updater) fetch(url string) (*http.Response, error) {
+	http.DefaultClient.Timeout = 5 * time.Second
+	return http.Get(url)
 }
 
 func readTime(path string) time.Time {
