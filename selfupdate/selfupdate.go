@@ -372,7 +372,6 @@ func (u *Updater) fetchBin() ([]byte, error) {
 		"Downloading",
 	)
 	if _, err = io.Copy(io.MultiWriter(buf, bar), gz); err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
 
