@@ -64,7 +64,8 @@ type Updater struct {
 		Version string
 		Sha256  []byte
 	}
-	OnSuccessfulUpdate func() // Optional function to run after an update has successfully taken place
+	OnSuccessfulUpdate func()                                  // Optional function to run after an update has successfully taken place
+	OnNewVersion       func(currentVersion, newVersion string) // Optional function to run if an update is available
 }
 
 func (u *Updater) getExecRelativeDir(dir string) string {
@@ -196,6 +197,9 @@ func (u *Updater) Update() error {
 	// we are on the latest version, nothing to do
 	if u.Info.Version == u.CurrentVersion {
 		return nil
+	}
+	if u.OnNewVersion != nil {
+		u.OnNewVersion(u.CurrentVersion, u.Info.Version)
 	}
 
 	old, err := os.Open(path)
